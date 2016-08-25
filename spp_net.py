@@ -27,33 +27,36 @@ class SPPnet:
 
     def _conv_layer(self, bottom, name, shape=None):
         with tf.variable_scope(name) as scope:
-            if self.random_weight :
+            if shape ==None :
+                filter = self.get_conv_filter(name)
+                conv_bias.get_bias(name)
+            else :
                 initW = tf.truncated_normal_initializer(stddev = 0.1)
                 filter = tf.getvariable(name='filter', shape=shape, initializer=initW)
                 initB = tf.constant_initializer(0.0)
                 conv_bias = tf.get_variable(name='bias',shape=shape[3], initializer=initB)
-            elif
-                filter = self.get_conv_filter(name)
-                conv_bias.get_bias(name)
             conv = tf.nn.conv2d(bottom, filter, strides=[1 ,1 ,1 ,1], padding='SAME')
             relu = tf.nn.relu( tf.nn.bias_add(conv, conv_bias) )
             
             return relu
     def _fc_layer(self, bottom, name, shape=None):
         with tf.variable_scope(name) as scope:
-            if self.random_weight:
+            if shape == None:
+                weight = self.get_conv_filter(name)
+                bias.get_bias(name)
+            else:
                 initW = tf.truncated_normal_initializer(stddev = 0.1)
                 weight = tf.getvariable(name='weight', shape=shape, initializer=initW)
                 initB = tf.constant_initializer(0.0)
-                bias = tf.get_variable(name='bias',shape=shape[3], initializer=initB)
-            elif:
-                weight = self.get_conv_filter(name)
-                bias.get_bias(name)
+                bias = tf.get_variable(name='bias',shape=shape[1], initializer=initB)
 
             fc = tf.nn.bias_add(tf.matmul(bottom, weight), bias)
-            relu = tf.nn.relu(fc)
-
-            return relu
+            
+            if name == 'fc8' :
+                return fc
+            else:
+                relu = tf.nn.relu(fc)
+                return relu
 
     def inference(self, data, train=True, num_class=1000):
         with tf.name_scope('Processing'):
@@ -84,29 +87,53 @@ class SPPnet:
             sppLayer = SPPLayer(bins, map_size)
             self.sppool = sppLayer.spatial_pyramid_pooling(self.conv5_3)
             
-            self.fc6 = self._fc_layer(sppool, 'fc6')
-            self.fc7 = self._fc_layer(fc6, 'fc7')
+            self.fc6 = self._fc_layer(self.sppool, 'fc6')
+            if train:
+                self.fc6 = tf.nn.dropout(self.fc6, 0.5, seed=SEED)
             
+            self.fc7 = self._fc_layer(self.fc6, 'fc7')
             if train:
                 self.fc7 = tf.nn.dropout(self.fc7, 0.5, seed=SEED)
+            
+            self.fc8 = self._fc_layer(self.fc7, 'fc8')
+            return self.fc8
+    
+    def loss(self, fc, label=None):
+            self.pred = tf.nn.softmax(fc)
+            if label is not None
+                label = tf.cast(label, tf.int64)
+                cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(
+                        logits, label, name = 'cross_entropy_all')
+                self.entropy_loss = tf.reduce_mean(cross_entropy, name='cross_entropy')
 
-            with tf.variable_scope('fc8') as scope:
-                num_hid = self.fc7.get_shape()[1]
-                initW = tf.truncated_normal_initializer(stddev = 0.1)
-                weight = tf.getvariable(name='weight', shape=[num_hid, num_class], initializer=initW)
-                initB = tf.constant_initializer(0.0)
-                bias = tf.get_variable(name='bias',shape=shape[num_class], initializer=initB)
-            self.fc8 = tf.nn.bias_add(tf.matmul(self.fc7, weight), bias)
+                correct_prediction = tf.equal(tf.argmax(y,1), tf.argmax(y_,1))
+                self.accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
+
+                return (self.entropy_loss, self.accuracy)
+            else:
+                return self.pred
+    
+    def train(self, loss):
+        self.optimizer = tf.train.MomentumOptimizer(self.lr, 0.9).minimize(loss,
+                global_step = self.global_step)
+        return (self.optimizer, self.lr)
+
+    def set_lr(self, lr, batch_size, train_size, decay_epochs = 10):
+        self.global_step = tf.Variable(0, trainable=False)
+        self.lr = tf.train.exponential_decay(lr, 
+                self.global_step*batch_size, train_size*decay_epochs, 0.95, staircase=True)
     def get_conv_filter(self, name):
         init = tf.constant_initializer(value=self.param_dict[name][0], dtype=tf.floate32)
         shape = self.param_dict[name][0].shape
         var = tf.get_variable(name = 'filter', initializer=init, shape=shape)
+        return var
     def get_fc_weight(self, name):
         init = tf.constant_initializer(value=self.param_dict[name][0], dtype=tf.floate32)
         shape = self.param_dict[name][0].shape
         var = tf.get_variable(name = 'weight', initializer=init, shape=shape)
+        return var
     def get_bias(self,name):
         init = tf.constant_initializer(value=self.param_dict[name][0], dtype=tf.floate32)
         shape = self.param_dict[name][0].shape
         var = tf.get_variable(name = 'bias', initializer=init, shape=shape)
-         
+        return var
