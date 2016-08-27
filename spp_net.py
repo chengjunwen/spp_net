@@ -13,7 +13,7 @@ import numpy as np
 import tensorflow as tf
 SEED = 1356
 VGG_MEAN = [103.939, 116.779, 123.68]
-
+stddev = 0.05
 class SPPnet:
     def __init__(self,model_file=None):
         self.random_weight= False
@@ -23,6 +23,7 @@ class SPPnet:
         if not os.path.isfile(model_file):
             logging.error(('model file is not exist:'), model_file)
         self.wd = 5e-4
+        self.stddev = 0.05
         self.param_dict = np.load(model_file).item()
         print('model file loaded')
     
@@ -34,7 +35,7 @@ class SPPnet:
                 filter = self.get_conv_filter(name)
                 conv_bias = self.get_bias(name)
             else :
-                initW = tf.truncated_normal_initializer(stddev = 0.1)
+                initW = tf.truncated_normal_initializer(stddev = self.stddev)
                 filter = tf.get_variable(name='filter', shape=shape, initializer=initW)
                 
                 initB = tf.constant_initializer(0.0)
@@ -49,7 +50,7 @@ class SPPnet:
                 weight = self.get_fc_weight(name)
                 bias = self.get_bias(name)
             else:
-                weight =self._variable_with_weight_decay(shape, 0.1, self.wd)
+                weight =self._variable_with_weight_decay(shape, self.stddev, self.wd)
                 initB = tf.constant_initializer(0.0)
                 bias = tf.get_variable(name='bias',shape=shape[1], initializer=initB)
 
@@ -63,31 +64,31 @@ class SPPnet:
 
     def inference(self, data, train=True, num_class=1000):
         with tf.name_scope('Processing'):
-            self.conv1_1 = self._conv_layer(data, 'conv1_1')
-            self.conv1_2 = self._conv_layer(self.conv1_1, 'conv1_2')
+            self.conv1_1 = self._conv_layer(data, 'conv1_1', [3,3,3,64])
+            self.conv1_2 = self._conv_layer(self.conv1_1, 'conv1_2', [3,3,64,64])
             self.pool1 = tf.nn.max_pool(self.conv1_2, ksize=[1,2,2,1],strides=[1,2,2,1],
                     padding='SAME',name='pool1')
 
-            self.conv2_1 = self._conv_layer(self.pool1, 'conv2_1')
-            self.conv2_2 = self._conv_layer(self.conv2_1, 'conv2_2')
+            self.conv2_1 = self._conv_layer(self.pool1, 'conv2_1', [3,3,64,128])
+            self.conv2_2 = self._conv_layer(self.conv2_1, 'conv2_2', [3,3,128,128])
             self.pool2 = tf.nn.max_pool(self.conv2_2, ksize=[1,2,2,1],strides=[1,2,2,1],
                     padding='SAME',name='pool2')
 
-            self.conv3_1 = self._conv_layer(self.pool2, 'conv3_1')
-            self.conv3_2 = self._conv_layer(self.conv3_1, 'conv3_2')
-            self.conv3_3 = self._conv_layer(self.conv3_2, 'conv3_3')
+            self.conv3_1 = self._conv_layer(self.pool2, 'conv3_1', [3,3,128,256])
+            self.conv3_2 = self._conv_layer(self.conv3_1, 'conv3_2', [3,3,256,256])
+            self.conv3_3 = self._conv_layer(self.conv3_2, 'conv3_3', [3,3,256,256])
             self.pool3 = tf.nn.max_pool(self.conv3_3, ksize=[1,2,2,1],strides=[1,2,2,1],
                     padding='SAME',name='pool3')
 
-            self.conv4_1 = self._conv_layer(self.pool3, 'conv4_1')
-            self.conv4_2 = self._conv_layer(self.conv4_1, 'conv4_2')
-            self.conv4_3 = self._conv_layer(self.conv4_2, 'conv4_3')
+            self.conv4_1 = self._conv_layer(self.pool3, 'conv4_1', [3,3,256,512])
+            self.conv4_2 = self._conv_layer(self.conv4_1, 'conv4_2', [3,3,512, 512])
+            self.conv4_3 = self._conv_layer(self.conv4_2, 'conv4_3', [3,3,512,512])
             self.pool4 = tf.nn.max_pool(self.conv4_3, ksize=[1,2,2,1],strides=[1,2,2,1],
                     padding='SAME',name='pool4')
             
-            self.conv5_1 = self._conv_layer(self.pool4, 'conv5_1')
-            self.conv5_2 = self._conv_layer(self.conv5_1, 'conv5_2')
-            self.conv5_3 = self._conv_layer(self.conv5_2, 'conv5_3')
+            self.conv5_1 = self._conv_layer(self.pool4, 'conv5_1', [3,3,512,512])
+            self.conv5_2 = self._conv_layer(self.conv5_1, 'conv5_2', [3,3,512,512])
+            self.conv5_3 = self._conv_layer(self.conv5_2, 'conv5_3', [3,3,512,512])
             
             bins = [3, 2, 1]
             map_size = self.conv5_3.get_shape().as_list()[2]
@@ -125,15 +126,18 @@ class SPPnet:
             else:
                 return self.pred
     
-    def train(self, loss):
+    def train(self, loss, global_step):
+        self.lr = tf.train.exponential_decay(self.lr, 
+                global_step*self.batch_size, self.train_size*self.decay_epochs, 0.95, staircase=True)
         self.optimizer = tf.train.MomentumOptimizer(self.lr, 0.9).minimize(loss,
-                global_step = self.global_step)
+                global_step = global_step)
         return (self.optimizer, self.lr)
 
     def set_lr(self, lr, batch_size, train_size, decay_epochs = 10):
-        self.global_step = tf.Variable(0, trainable=False)
-        self.lr = tf.train.exponential_decay(lr, 
-                self.global_step*batch_size, train_size*decay_epochs, 0.95, staircase=True)
+        self.lr = lr
+        self.batch_size = batch_size
+        self.train_size = train_size
+        self.decay_epochs = decay_epochs
     def get_conv_filter(self, name):
         init = tf.constant_initializer(value=self.param_dict[name][0], dtype=tf.float32)
         shape = self.param_dict[name][0].shape
