@@ -17,39 +17,7 @@ from tensorflow.python.framework import dtypes
 
 HEIGHT = 224
 WIDTH = 224
-NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 50000
-NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = 10000
-def input_data(data_dir, trainfile, batch_size, shuffle=True):
-    
-    with open(trainfile) as fp:
-        lines = fp.readlines()
-    filenames = [line.rstrip('\n') for line in lines]
-    filepaths = [ os.path.join(data_dir, name) for name in filenames ]
-    filepaths = ops.convert_to_tensor(filepaths, dtype=dtypes.string)
-    filename_queue = tf.train.string_input_producer(filepaths)
-    image, label = read_celtach(filename_queue.dequeue())
-
-    distored_image = tf.random_crop(image, [HEIGHT, WIDTH, 3])
-    distorted_image = tf.image.random_flip_left_right(distored_image)
-    distorted_image = tf.image.random_brightness(distorted_image,max_delta=63)
-    distorted_image = tf.image.random_contrast(distorted_image,lower=0.2, upper=1.8)
-    float_image = tf.image.per_image_whitening(distorted_image)
-
-    min_fraction_of_examples_in_queue = 0.4
-    min_queue_examples = int(NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN *
-            min_fraction_of_examples_in_queue)
-    print ('Filling queue with %d CIFAR images before starting to train. '
-            'This will take a few minutes.' % min_queue_examples)
-
-
-    return _generate_image_and_label_batch(float_image, label, min_queue_examples, batch_size, shuffle)
-
-def read_celtach(filename_and_label_queue):
-
-    filename, label = tf.decode_csv(filename_and_label_queue, [[""]], [[""]], " ")
-    file_content = tf.read_file(filename)
-    image = tf.image.decode_png(file_content)
-    return (image, label)
+NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 2000
 
 def _generate_image_and_label_batch(image, label, min_queue_examples, batch_size, shuffle):
     """Construct a queued batch of images and labels.
@@ -119,7 +87,7 @@ def read_images_from_disk(input_queue):
     """
     label = input_queue[1]
     file_contents = tf.read_file(input_queue[0])
-    example = tf.image.decode_png(file_contents, channels=3)
+    example = tf.image.decode_jpeg(file_contents, channels=3)
     return (example, label)
 
 def input_data_t(data_dir, trainfile, batch_size, shuffle=True):

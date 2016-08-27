@@ -115,13 +115,13 @@ class SPPnet:
                 cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(
                         logits, label, name = 'cross_entropy_all')
                 self.entropy_loss = tf.reduce_mean(cross_entropy, name='cross_entropy')
-                tf.add_to_collection('losses', self.entropy_loss)
-                self.all_loss = tf.add_n(tf.get_collection('losses'), name='total_loss')
+#                tf.add_to_collection('losses', self.entropy_loss)
+#                self.all_loss = tf.add_n(tf.get_collection('losses'), name='total_loss')
                 
                 correct_prediction = tf.equal(tf.argmax(logits,1), label)
                 self.accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
 
-                return (self.all_loss, self.accuracy)
+                return (self.entropy_loss, self.accuracy)
             else:
                 return self.pred
     
@@ -140,10 +140,10 @@ class SPPnet:
         print('conv Layer name: %s' % name)
         print('conv Layer shape: %s' % str(shape))
         var = tf.get_variable(name = 'filter', initializer=init, shape=shape)
-        if not tf.get_variable_scope().reuse:
-            weight_decay = tf.mul(tf.nn.l2_loss(var), self.wd,
-                                  name='weight_loss')
-            tf.add_to_collection('losses', weight_decay)
+#        if not tf.get_variable_scope().reuse:
+#            weight_decay = tf.mul(tf.nn.l2_loss(var), self.wd,
+#                                  name='weight_loss')
+#            tf.add_to_collection('losses', weight_decay)
 
         return var
     def get_fc_weight(self, name):
@@ -152,10 +152,10 @@ class SPPnet:
         print('fc Layer name: %s' % name)
         print('fc Layer shape: %s' % str(shape))
         var = tf.get_variable(name = 'weight', initializer=init, shape=shape)
-        if not tf.get_variable_scope().reuse:
-            weight_decay = tf.mul(tf.nn.l2_loss(var), self.wd,
-                                  name='weight_loss')
-            tf.add_to_collection('losses', weight_decay)
+#        if not tf.get_variable_scope().reuse:
+#            weight_decay = tf.mul(tf.nn.l2_loss(var), self.wd,
+#                                  name='weight_loss')
+#            tf.add_to_collection('losses', weight_decay)
 
         return var
     def get_bias(self,name):
@@ -186,8 +186,8 @@ class SPPnet:
         var = tf.get_variable('weights', shape=shape,
                               initializer=initializer)
 
-        if wd and (not tf.get_variable_scope().reuse):
-            weight_decay = tf.mul(tf.nn.l2_loss(var), wd, name='weight_loss')
-            tf.add_to_collection('losses', weight_decay)
+#        if wd and (not tf.get_variable_scope().reuse):
+#            weight_decay = tf.mul(tf.nn.l2_loss(var), wd, name='weight_loss')
+#            tf.add_to_collection('losses', weight_decay)
         return var
 
