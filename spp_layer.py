@@ -21,13 +21,16 @@ class SPPLayer():
 
         self.pooled_out = []
         for i in range(self.n):
-            self.pooled_out.append(tf.nn.max_pool(self.input,
-                ksize=[1, self.filters[i], self.filters[i], 1], 
-                strides=[1, self.strides[i], self.strides[i], 1],
-                padding='VALID'))
+            self.pooled_out.append(tf.keras.layers.MaxPool2D(
+                                   pool_size=(1, self.filters[i]),
+                                   strides=(1, self.strides[i]),
+                                   padding="valid")(self.input))
 
         for i in range(self.n):
-            self.pooled_out[i] = tf.reshape(self.pooled_out[i], [self.batch_size, -1])
+            if self.batch_size is None:
+                self.pooled_out[i] = tf.reshape(self.pooled_out[i], [-1,])
+            else:
+                self.pooled_out[i] = tf.reshape(self.pooled_out[i], [self.batch_size, -1])
         
         self.output = tf.concat(1, [self.pooled_out[0], self.pooled_out[1], self.pooled_out[2]])
 
